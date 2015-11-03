@@ -1,0 +1,106 @@
+<?php
+
+namespace rentalcar\model\dao;
+
+use rentalcar\model\dao\DBOperation;
+use rentalcar\model\Client;
+
+class ClientManager
+{
+  private static function converToObject($aClient){
+    $oClient = new Client($aClient['id'], $aClient['login'], $aClient['password']);
+    return $oClient;
+  }
+  /**
+  * Get all Clients.
+  *
+  * @return array(Client) all object(Clients).
+  */
+  public static function getAll()
+  {
+    $sQuery = 'SELECT * FROM Client';
+    $aClients = array();
+    foreach (DBOperation::getAll($sQuery) as $aClient) {
+      $aClients[] = self::convertToObject($aClient);
+    }
+    return $aClients;
+  }
+
+  public static function subscribe(Client $oClient)
+  {
+    $sLogin=addslashes($oClient->getLogin());
+    $sPassword=addslashes($oClient->getCryptedPassword());
+    $iRole=$oClient->getRole();
+    $sQuery="INSERT INTO Client(login,password,role) VALUES ('$sLogin', '$sPassword','$iRole') ";
+    $bSuccess = DBOperation::exec($sQuery);
+
+    if (!$bSuccess) {
+      return false;
+    }
+    return true;
+  }
+
+  public static function connect(Client $oClient) {
+    $sQuery = "SELECT * FROM Client WHERE login ='{$oClient->getLogin()}'AND password = '{$oClient->getCryptedPassword()}' LIMIT 1";
+
+    $sResult = DBOperation::getOne($sQuery);
+
+    if ($sResult != false) {
+      $_SESSION['id'] = intval($sResult['id']);
+      $_SESSION['login'] = $sResult['login'];
+      $_SESSION['role'] = $sResult['role'];
+      $_SESSION['voiture_id'] = $sResult['voiture_id'];
+    } else {
+      unset($_SESSION['login']);
+    }
+    return $sResult;
+  }
+
+  public static function logout()
+  {
+    unset($_SESSION['login']);
+  }
+
+  public static function get(Client $oClient)
+  {
+    $iId=addslashes($oClient->getId());
+    $sQuery = "SELECT * FROM Client WHERE login ='$iId' limit 1";
+
+    return self::converToObject(DBOperation::getOne($sQuery));
+  }
+
+  public static function getCurrent()
+  {
+    if (!array_key_exists('id', $_SESSION)) {
+      return null;
+    }
+    $oClient = new Client();
+    $oClient->setLogin($_SESSION['id']);
+    return self::get($oClient);
+  }
+  public static function rentCar($iIdVoiture, $iIdClient)
+  {
+    $sQueryVoiture="UPDATE Voiture SET client_id='$iIdClient' WHERE id='$iIdVoiture'";
+    $sQueryClient="UPDATE Client SET voiture_id='$iIdVoiture' WHERE id='$iIdClient'";
+    $bSuccess = DBOperation::exec($sQueryVoiture);
+    $bSuccess_2 = DBOperation::exec($sQueryClient);
+    if (!$bSuccess || !$bSuccess_2) {
+      return false;
+    }
+    $_SESSION['voiture_id'] = $iIdVoiture;
+    return true;
+  }
+  public static function unRentCar($iIdVoiture, $iIdClient)
+  {
+    $sQueryVoiture="UPDATE Voiture SET client_id=null WHERE id='$iIdVoiture'";
+    $sQueryClient="UPDATE Client SET voiture_id=null WHERE id='$iIdClient'";
+    $bSuccess = DBOperation::exec($sQueryVoiture);
+    $bSuccess_2 = DBOperation::exec($sQueryClient);
+    if (!$bSuccess || !$bSuccess_2) {
+      return false;
+    }
+    $_SESSION['voiture_id'] = null;
+    return true;
+  }
+
+}
