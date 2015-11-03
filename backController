@@ -1,0 +1,221 @@
+<?php
+
+namespace rentalcar\controller;
+
+use rentalcar\model\dao\VoitureManager;
+use rentalcar\model\dao\ClientManager;
+use rentalcar\model\Client;
+use rentalcar\model\Voiture;
+
+class backController{
+
+  public function homeAction()
+  {
+    if (empty($_SESSION['login'])){
+      $this->loginAction();
+      return;
+    }
+    $aVoitures = VoitureManager::getAll();
+    require ROOT . 'src/rentalcar/view/home.php';
+  }
+
+  public function formAction()
+  {
+    $sErr = null;
+    $marque=$couleur=$model=$image=null;
+
+    if(array_key_exists('voiture',$_GET) || array_key_exists('id', $_POST)){
+      $iId = isset($_GET['voiture']) ? intval($_GET['voiture']) : intval($_POST["id"]);
+      $oVoiture= VoitureManager::getOne($iId);
+      $id=$iId;
+      $model= $oVoiture->getModele();
+      $marque= $oVoiture->getMarque();
+      $couleur= $oVoiture->getCouleur();
+      $image=$oVoiture->getImage();
+
+    } else {
+      $id=null;
+    }
+    if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+      if (empty($_POST['id'])) {
+        $id = NULL;
+      } else {
+        $id = intval($_POST['id']);
+      }
+
+      if (empty($_POST['marque'])) {
+        $sErr = "Veuillez saisir la marque du constructeur.";
+      } else {
+        $marque = $this->test_input($_POST['marque']);
+        //On vérifie que seul des lettres et des chiffres soient mis.
+        if (!preg_match("/^[a-zA-Z1-9 ]*$/", $marque)) {
+          $sErr = "Seul des lettres, des chiffre et des espaces son autorisés";
+        }
+      }
+
+      if (empty($_POST['modele'])) {
+        $sErr = "Veuillez saisir le modèle du véhicule.";
+      } else {
+        $model = $this->test_input($_POST['modele']);
+        //On vérifie que seul des lettres et des chiffres soient mis.
+        if (!preg_match("/^[a-zA-Z1-9 ]*$/", $model)) {
+          $sErr = "Seul des lettres, des chiffre et des espaces son autorisés";
+        }
+      }
+
+      if (empty($_POST['couleur'])) {
+        $sErr = "Veuillez saisir la couleure du véhicule.";
+      } else {
+        $couleur = $this->test_input($_POST['couleur']);
+        //On vérifie que seul des lettres et des chiffres soient mis.
+        if (!preg_match("/^[a-zA-Z1-9 ]*$/", $couleur)) {
+          $sErr = "Seul des lettres, des chiffre et des espaces son autorisés";
+        }
+      }
+      if (!empty($_FILES["image"]['name']) && empty($sErr)) {
+        $dossier = 'data/';
+        $fichier = basename($_FILES['image']['name']);
+        $taille_maxi = 3145728;
+        $taille = filesize($_FILES['image']['tmp_name']);
+        $extensions = array('.jpg', '.png');
+        $extension = strrchr($_FILES['image']['name'], '.');
+        if (!in_array($extension, $extensions)) { //Si l'extension n'est pas dans le tableau
+          $sErr = 'Vous devez uploader un fichier de type .jpg ou .png';
+        }
+        if ($taille > $taille_maxi) {
+          $sErr = 'Le fichier est trop gros...';
+        }
+        if (!isset($sErr)) { //S'il n'y a pas d'erreur, on upload
+          //On formate le nom du fichier ici...
+          $fichier = strtr($fichier, 'ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÝàáâãäåçèéêëìíîïðòóôõöùúûüýÿ', 'AAAAAACEEEEIIIIOOOOOUUUUYaaaaaaceeeeiiiioooooouuuuyy');
+          $fichier = preg_replace('/([^.a-z0-9]+)/i', '-', $fichier);
+          if (!move_uploaded_file($_FILES['image']['tmp_name'], $dossier . $fichier)) { //Si la fonction renvoie false, c'est que ça n'a pas fonctionné
+            $sErr = 'Echec de l\'upload !';
+          } else {
+
+            if (!empty($image)) {
+              $path = $dossier . $image;
+              unlink($path);
+            }
+            $image = $fichier;
+          }
+        }
+      }
+      if(empty($sErr)){
+        $oVoiture= new Voiture($id,$model,$marque,$couleur,$image,"");
+        if (!empty($id)) {
+          VoitureManager::update($oVoiture);
+        } else {
+          VoitureManager::getCreate($oVoiture);
+        }
+        header("Location: index.php");
+      }
+    }
+    require ROOT . 'src/rentalcar/view/form.php';
+  }
+
+  public static function deleteAction()
+  {
+    if(!array_key_exists('voiture',$_GET)){
+      Controller::errorAction();
+      return;
+    }
+    $iId = intval($_GET['voiture']);
+    $oVoiture= VoitureManager::getOne($iId);
+    VoitureManager::delete($oVoiture);
+    header("Location: index.php");
+  }
+
+  private function test_input($data)
+  {
+    $data = trim($data);
+    $data = stripslashes($data);
+    $data = htmlspecialchars($data);
+    return $data;
+  }
+
+  public function loginAction()
+  {
+    if (array_key_exists('subscribe', $_POST)) {
+      $this->performSubscription();
+    } elseif (array_key_exists('connect', $_POST)) {
+      $this->performConnection();
+    } else {
+      $bConnectError = false;
+      $bSubscribeError = false;
+      require ROOT . 'src/rentalcar/view/login.php';
+    }
+  }
+
+  public function logoutAction()
+  {
+
+    ClientManager::logout(ClientManager::getCurrent());
+    $_SESSION['role']=null;
+    session_destroy();
+    header('location: index.php');
+  }
+
+  public function performSubscription()
+  {
+    $oClient = new Client();
+    $oClient->setLogin($_POST['login']);
+    $oClient->setPassword($_POST['password']);
+    $oClient->setRole(2);
+
+    if (ClientManager::subscribe($oClient)) {
+      $_SESSION['login'] = $oClient->getlogin();
+      $_SESSION['role'] = $oClient->getRole();
+      $this->homeAction();
+    } else {
+      $bSubscribeError = true;
+      require ROOT . 'src/rentalcar/view/login.php';
+    }
+  }
+
+  public function performConnection()
+  {
+    $oClient = new Client();
+    $oClient->setLogin($_POST['login']);
+    $oClient->setPassword($_POST['password']);
+
+    if (ClientManager::connect($oClient)) {
+      header('location: index.php');
+    } else {
+      $bConnectError = true;
+      require ROOT . 'src/rentalcar/view/login.php';
+    }
+  }
+  public function rentAction()
+  {
+    if (empty($_SESSION['login'])){
+      echo "<script>alert(\"Vous devez être connecté pour louer une voiture!\")</script>";
+      $this->loginAction();
+      return;
+    }
+    if(!empty($_SESSION['voiture_id'])){
+      echo "<script>alert(\"Vous louez déjà une voiture en ce moment!\")</script>";
+      $this->homeAction();
+      return;
+    }
+    $iIdClient=$_SESSION['id'];
+
+    if(array_key_exists('voiture',$_GET)){
+      $iIdVoiture=intval($_GET['voiture']);
+    }
+    ClientManager::rentCar($iIdVoiture,$iIdClient);
+    header('location: index.php');
+    return;
+  }
+  public function unRentAction()
+  {
+    $iIdClient=$_SESSION['id'];
+    if(array_key_exists('voiture',$_GET)){
+      $iIdVoiture=intval($_GET['voiture']);
+    }
+    ClientManager::unRentCar($iIdVoiture,$iIdClient);
+    header('location: index.php');
+    return;
+  }
+}
