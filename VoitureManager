@@ -1,0 +1,84 @@
+<?php
+
+namespace rentalcar\model\dao;
+
+use rentalcar\model\dao\DBOperation;
+use rentalcar\model\Client;
+use rentalcar\model\Voiture;
+class VoitureManager
+{
+    private static function convertToObject($aVoiture)
+    {
+      $oVoiture= new Voiture($aVoiture['id'], $aVoiture['modele'], $aVoiture['marque'], $aVoiture['couleur'], $aVoiture["image"], $aVoiture['client_id']);
+      return $oVoiture;
+    }
+    public static function getAll()
+    {
+        $query = "SELECT * FROM voiture";
+        $aVoitures = array();
+        foreach (DBOperation::getAll($query) as $aVoiture) {
+            $aVoitures[]= self::convertToObject($aVoiture);
+        }
+        return  $aVoitures;
+    }
+    public static function getOne($id)
+    {
+      $query = "SELECT * FROM voiture WHERE id=".$id;
+      $aVoiture = array();
+      foreach (DBOperation::getAll($query) as $voiture) {
+          $aVoiture['id']=$voiture['id'];
+          $aVoiture['modele']=$voiture['modele'];
+          $aVoiture['marque']=$voiture['marque'];
+          $aVoiture['couleur']=$voiture['couleur'];
+          $aVoiture['image']=$voiture['image'];
+          $aVoiture['client_id']=$voiture['client_id'];
+      }
+      return  self::convertToObject($aVoiture);
+    }
+
+    public static function getCreate(Voiture $oVoiture)
+    {
+        $sMarque = addslashes($oVoiture->getMarque());
+        $sModele = addslashes($oVoiture->getModele());
+        $sCouleur = addslashes($oVoiture->getCouleur());
+        $sImage = addslashes($oVoiture->getImage());
+
+        $sQuery = 'INSERT INTO Voiture(modele, marque, couleur, image) VALUES(';
+        $sQuery .= "'$sModele', '$sMarque', '$sCouleur', '$sImage'";
+        $sQuery .= ')';
+        $bSuccess = DBOperation::exec($sQuery);
+
+        if (!$bSuccess) {
+          return false;
+        }
+        return true;
+  }
+
+  public static function update(Voiture $oVoiture)
+  {
+    $iId=$oVoiture->getId();
+    $sModel=addslashes($oVoiture->getModele());
+    $sMarque=addslashes($oVoiture->getMarque());
+    $sCouleur=addslashes($oVoiture->getCouleur());
+    $sImage=addslashes($oVoiture->getImage());
+
+    $sQuery="UPDATE voiture SET modele='$sModel',marque='$sMarque',couleur='$sCouleur',image='$sImage' WHERE id=" . $iId;
+    $bSuccess = DBOperation::exec($sQuery);
+    if (!$bSuccess) {
+      return false;
+    }
+    return true;
+  }
+
+  public static function delete(Voiture $oVoiture)
+  {
+
+    $sQuery= " DELETE FROM voiture WHERE id=".$oVoiture->getId();
+    $bSuccess = DBOperation::exec($sQuery);
+    if (!$bSuccess) {
+      return false;
+    }
+    return true;
+  }
+
+}
